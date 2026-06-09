@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMU Pro-Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3498db;
+            --success: #00e676;
+            --error: #ff3d00;
+            --bg: #0a0a0c;
+            --panel: rgba(25, 25, 30, 0.85);
+        }
+
+        body { 
+            margin: 0; 
+            background: var(--bg); 
+            color: white; 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; 
+            display: flex;
+        }
+
+        /* --- UI Panels --- */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+            padding: 20px;
+            gap: 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .panel {
+            background: var(--panel);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            pointer-events: auto;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+        }
+
+        h2 { margin: 0 0 15px 0; font-size: 18px; font-weight: 700; letter-spacing: -0.5px; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        
+        /* --- Controls --- */
+        .input-group { margin-bottom: 15px; }
+        .label { font-size: 11px; text-transform: uppercase; color: #888; font-weight: 600; margin-bottom: 5px; }
+        input { 
+            background: rgba(255,255,255,0.05); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            color: white; padding: 10px; border-radius: 8px; width: 100%; 
+            box-sizing: border-box; font-family: 'JetBrains Mono', monospace;
+        }
+        button { 
+            background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; 
+            cursor: pointer; width: 100%; font-weight: 600; transition: 0.2s;
+        }
+        button:hover { filter: brightness(1.2); transform: translateY(-1px); }
+        button.secondary { background: rgba(255,255,255,0.1); margin-top: 10px; }
+
+        /* --- Stats & Status --- */
+        #status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(255, 61, 0, 0.2);
+            color: var(--error);
+            margin-bottom: 20px;
+        }
+        #status-badge.connected {
+            background: rgba(0, 230, 118, 0.2);
+            color: var(--success);
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; color: #fff; }
+
+        /* --- Charts --- */
+        .chart-container { flex: 1; min-height: 150px; margin-top: 10px; }
+
+        canvas#three-canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+    </style>
+</head>
+<body>
+    <canvas id="three-canvas"></canvas>
+
+    <div id="ui-layer">
+        <!-- Dependency Error Overlay -->
+        <div id="offline-error" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px;">
+            <h1 style="color: var(--error); font-size: 48px; margin-bottom: 20px;">⚠️ OFFLINE DETECTED</h1>
+            <p style="font-size: 18px; max-width: 600px; line-height: 1.6;">The 3D Engine (Three.js) failed to load. This usually happens because you are connected to the ESP32 WiFi which has no internet.</p>
+            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; margin-top: 30px; border: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="color: var(--primary); margin-top: 0;">FIX STEPS:</h3>
+                <ol style="text-align: left; display: inline-block;">
+                    <li>Switch your Mac back to your <b>Home WiFi</b>.</li>
+                    <li><b>Refresh</b> this page (Cmd+R).</li>
+                    <li>Verify you see the 3D Grid.</li>
+                    <li>Switch back to <b>IMU-Visualizer-Fallback</b> WiFi.</li>
+                    <li>Set IP to <b>192.168.4.1</b> and Connect.</li>
+                </ol>
+            </div>
+            <button onclick="location.reload()" style="margin-top: 30px; width: auto; padding: 15px 40px;">I AM BACK ONLINE - RELOAD</button>
+        </div>
+
+        <!-- Left Panel: Controls -->
+        <div class="panel">
+            <h2>🛰️ SYSTEM CONTROL</h2>
+            <div id="status-badge">DISCONNECTED</div>
+            
+            <div class="input-group">
+                <div class="label">Device Endpoint</div>
+                <input type="text" id="ip-address" value="imu.local">
+            </div>
+
+            <div class="input-group">
+                <div class="label">Operation Mode</div>
+                <select id="op-mode" onchange="updateOpMode()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 10px; border-radius: 8px; width: 100%; font-family: 'Inter', sans-serif;">
+                    <option value="visual">✨ High-Fidelity Visual</option>
+                    <option value="robot">⚡ Robot Speed (Reliable)</option>
+                </select>
+            </div>
+
+            <button onclick="connect()">INITIALIZE LINK</button>
+            <button class="secondary" onclick="calibrate()">CALIBRATE SENSORS</button>
+            
+            <div style="margin-top: 20px;">
+                <h2>📊 REAL-TIME FEED</h2>
+                <div class="stat-card">
+                    <div class="label">Linear Acceleration (m/s²)</div>
+                    <div id="accel-val" class="stat-value">0.00, 0.00, 0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Angular Velocity (rad/s)</div>
+                    <div id="gyro-val" class="stat-value">0.00, 0.00, 0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div></div> <!-- Spacer -->
+
+        <!-- Right Panel: Analytics -->
+        <div class="panel">
+            <h2>📈 MOTION ANALYSIS</h2>
+            <div class="label">Accelerometer History</div>
+            <div class="chart-container">
+                <canvas id="accelChart"></canvas>
+            </div>
+            <div class="label" style="margin-top:20px">Gyroscope History</div>
+            <div class="chart-container">
+                <canvas id="gyroChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 0. Dependency Check ---
+        if (typeof THREE === 'undefined' || typeof Chart === 'undefined') {
+            document.getElementById('offline-error').style.display = 'flex';
+            throw new Error("Critical Dependencies Missing: Are you offline?");
+        }
+
+        // --- 1. Three.js Engine ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ 
+            canvas: document.getElementById('three-canvas'),
+            antialias: true,
+            alpha: true 
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const spotLight = new THREE.SpotLight(0xffffff, 1);
+        spotLight.position.set(10, 10, 10);
+        scene.add(spotLight);
+
+        // Model (A sleek glass/metal chassis)
+        const geometry = new THREE.BoxGeometry(3.5, 0.4, 6);
+        const material = new THREE.MeshPhongMaterial({ 
+            color: 0x3498db, 
+            specular: 0x111111, 
+            shininess: 100,
+            transparent: true,
+            opacity: 0.9
+        });
+        const robot = new THREE.Mesh(geometry, material);
+        scene.add(robot);
+
+        // --- Axis Visualization ---
+        // Global Axes (Static)
+        const globalAxes = new THREE.AxesHelper(10);
+        scene.add(globalAxes);
+
+        // Local Robot Axes (Attached to the robot)
+        function createArrow(dir, color) {
+            return new THREE.ArrowHelper(dir, new THREE.Vector3(0,0,0), 4, color, 0.8, 0.4);
+        }
+        
+        const arrowX = createArrow(new THREE.Vector3(1, 0, 0), 0xff3d00); // Red: X
+        const arrowY = createArrow(new THREE.Vector3(0, 1, 0), 0x00e676); // Green: Y
+        const arrowZ = createArrow(new THREE.Vector3(0, 0, 1), 0x2979ff); // Blue: Z
+        
+        robot.add(arrowX);
+        robot.add(arrowY);
+        robot.add(arrowZ);
+
+        // Add a "Front" marker
+        const headGeom = new THREE.BoxGeometry(3.5, 0.1, 0.5);
+        const headMat = new THREE.MeshPhongMaterial({ color: 0xe74c3c });
+        const head = new THREE.Mesh(headGeom, headMat);
+        head.position.z = 2.75;
+        robot.add(head);
+
+        const grid = new THREE.GridHelper(30, 30, 0x333333, 0x111111);
+        grid.position.y = -3;
+        scene.add(grid);
+
+        camera.position.set(6, 4, 8);
+        camera.lookAt(0, 0, 0);
+
+        // --- 2. Charts (Chart.js) ---
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            parsing: true,   // FIXED: Must be true to accept raw numeric arrays
+            normalized: true,
+            scales: { 
+                y: { 
+                    grid: { color: 'rgba(255,255,255,0.05)' }, 
+                    ticks: { color: '#666' },
+                    suggestedMin: -2, // Center the jitter
+                    suggestedMax: 2
+                }, 
+                x: { display: false } 
+            },
+            plugins: { legend: { display: false } },
+            elements: { 
+                point: { radius: 0 }, 
+                line: { borderWeight: 1, tension: 0 }
+            }
+        };
+
+        const accelChart = new Chart(document.getElementById('accelChart'), {
+            type: 'line',
+            data: { labels: Array(50).fill(''), datasets: [
+                { data: [], borderColor: '#ff3d00' }, { data: [], borderColor: '#00e676' }, { data: [], borderColor: '#2979ff' }
+            ]},
+            options: chartOptions
+        });
+
+        const gyroChart = new Chart(document.getElementById('gyroChart'), {
+            type: 'line',
+            data: { labels: Array(50).fill(''), datasets: [
+                { data: [], borderColor: '#ff3d00' }, { data: [], borderColor: '#00e676' }, { data: [], borderColor: '#2979ff' }
+            ]},
+            options: chartOptions
+        });
+
+        // --- 3. Telemetry & Logic ---
+        let socket;
+        let lastChartUpdate = 0;
+        let lastTimestamp = 0;
+        let offsets = { roll: 0, pitch: 0 };
+        let targetRotation = { x: 0, y: 0, z: 0 };
+        let currentMode = 'visual';
+        const statusBadge = document.getElementById('status-badge');
+        
+        function updateOpMode() {
+            currentMode = document.getElementById('op-mode').value;
+            const analyticsPanel = document.querySelectorAll('.panel')[1];
+            if (currentMode === 'robot') {
+                analyticsPanel.style.opacity = '0.3';
+                analyticsPanel.style.pointerEvents = 'none';
+                statusBadge.innerText = '⚡ ROBOT MODE ACTIVE';
+            } else {
+                analyticsPanel.style.opacity = '1';
+                analyticsPanel.style.pointerEvents = 'auto';
+                statusBadge.innerText = '✨ VISUAL MODE ACTIVE';
+            }
+        }
+
+        function connect() {
+            if (socket) socket.close();
+            const target = document.getElementById('ip-address').value;
+            statusBadge.innerText = 'LINKING...';
+            
+            socket = new WebSocket(`ws://${target}/ws`);
+            socket.onopen = () => {
+                updateOpMode();
+                statusBadge.classList.add('connected');
+                lastTimestamp = Date.now();
+            };
+            socket.onclose = () => {
+                statusBadge.innerText = 'LINK LOST';
+                statusBadge.classList.remove('connected');
+                setTimeout(connect, 3000);
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const now = Date.now();
+                const dt = (now - lastTimestamp) / 1000;
+                lastTimestamp = now;
+                
+                if (currentMode === 'visual') {
+                    document.getElementById('accel-val').innerText = `${data.ax.toFixed(2)}, ${data.ay.toFixed(2)}, ${data.az.toFixed(2)}`;
+                    document.getElementById('gyro-val').innerText = `${data.gx.toFixed(2)}, ${data.gy.toFixed(2)}, ${data.gz.toFixed(2)}`;
+
+                    if (now - lastChartUpdate > 100) {
+                        lastChartUpdate = now;
+                        accelChart.data.datasets[0].data.push(data.ax);
+                        accelChart.data.datasets[1].data.push(data.ay);
+                        accelChart.data.datasets[2].data.push(data.az);
+                        gyroChart.data.datasets[0].data.push(data.gx);
+                        gyroChart.data.datasets[1].data.push(data.gy);
+                        gyroChart.data.datasets[2].data.push(data.gz);
+
+                        [accelChart, gyroChart].forEach(chart => {
+                            if (chart.data.datasets[0].data.length > 50) {
+                                chart.data.datasets.forEach(d => d.data.shift());
+                            }
+                            chart.update('none');
+                        });
+                    }
+                } else {
+                    if (now - lastChartUpdate > 1000) {
+                        lastChartUpdate = now;
+                        document.getElementById('accel-val').innerText = "⚡ High-Speed Link Active";
+                        document.getElementById('gyro-val').innerText = `Sync: ${data.ax.toFixed(1)}, ${data.ay.toFixed(1)}`;
+                    }
+                }
+
+                const pitch = Math.atan2(-data.ax, Math.sqrt(data.ay * data.ay + data.az * data.az));
+                const roll = Math.atan2(data.ay, data.az);
+                
+                targetRotation.y += data.gz * dt;
+                targetRotation.x = roll - offsets.roll;
+                targetRotation.z = pitch - offsets.pitch;
+            };
+        }
+
+        function calibrate() {
+            const dataText = document.getElementById('accel-val').innerText.split(', ');
+            const ax = parseFloat(dataText[0]);
+            const ay = parseFloat(dataText[1]);
+            const az = parseFloat(dataText[2]);
+            offsets.pitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
+            offsets.roll = Math.atan2(ay, az);
+            targetRotation.y = 0;
+        }
+
+        function shortestAngleDist(target, current) {
+            let diff = target - current;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            return diff;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const diffX = shortestAngleDist(targetRotation.x, robot.rotation.x);
+            const diffY = shortestAngleDist(targetRotation.y, robot.rotation.y);
+            const diffZ = shortestAngleDist(targetRotation.z, robot.rotation.z);
+
+            if (currentMode === 'visual') {
+                robot.rotation.x += diffX * 0.15; 
+                robot.rotation.y += diffY * 0.15; 
+                robot.rotation.z += diffZ * 0.15;
+            } else {
+                robot.rotation.x += diffX; 
+                robot.rotation.y += diffY; 
+                robot.rotation.z += diffZ;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        connect();
+        animate();
+    </script>
+</body>
+</html>
