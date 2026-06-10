@@ -288,10 +288,10 @@ function btnFeedback(id, type) {
   if (type === 'loading') {
     btn.disabled = true;
     btn.className = 'loading';
-    return function() { 
+    return function(newTxt, newClass) { 
       btn.disabled = false; 
-      btn.className = oldClass; 
-      btn.textContent = oldTxt;
+      btn.className = newClass !== undefined ? newClass : oldClass; 
+      btn.textContent = newTxt !== undefined ? newTxt : oldTxt;
     };
   }
 
@@ -391,13 +391,10 @@ function toggleLed(type) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       ledStates[type] = (d.led === 'on');
-      const btn = document.getElementById(type + '-btn');
-      if (btn) {
-        const label = type.charAt(0).toUpperCase() + type.slice(1);
-        btn.textContent = label + ': ' + (ledStates[type] ? 'ON' : 'OFF');
-        btn.className   = ledStates[type] ? 'active' : '';
-      }
-      done();
+      const label = type.charAt(0).toUpperCase() + type.slice(1);
+      const newTxt = label + ': ' + (ledStates[type] ? 'ON' : 'OFF');
+      const newClass = ledStates[type] ? 'active' : '';
+      done(newTxt, newClass);
     })
     .catch(function(err) { 
       console.error('[ERR] LED failed:', err);
@@ -418,8 +415,11 @@ function toggleRecording() {
   fetch(CAM + '/record?action=' + action + '&policy=' + policy)
     .then(function(r) { return r.json(); })
     .then(function(d) {
+      recording = d.recording;
+      const newTxt = recording ? 'Stop Recording' : 'Start Recording';
+      const newClass = recording ? 'active' : '';
+      done(newTxt, newClass);
       updateRecordingUI(d);
-      done();
     })
     .catch(function(err) { 
       console.error('[ERR] Record failed:', err);

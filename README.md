@@ -18,6 +18,15 @@ A modular, high-performance ESP32-CAM firmware featuring MJPEG streaming, an int
 
 ---
 
+## 📸 Showcase
+
+<p align="center">
+  <img src="dashboard/dash1.png" width="45%" alt="Dashboard Top" />
+  <img src="dashboard/dash2.png" width="45%" alt="Dashboard Bottom" />
+</p>
+
+---
+
 ## 🛠 Hardware Specifications
 
 | Component | Detail |
