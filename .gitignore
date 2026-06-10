@@ -8,4 +8,4 @@ firmware/.vscode/c_cpp_properties.json
 firmware/.vscode/launch.json
 firmware/.vscode/ipch
 firmware/.vscode/settings.json
-firmware/include/wifi_config.h
+firmware/include/config.h
