@@ -221,11 +221,27 @@ static esp_err_t ledHandler(httpd_req_t* req) {
 static esp_err_t resolutionHandler(httpd_req_t* req) {
     char query[32];
     char size[16];
+    
+    if (recorderIsRecording()) {
+        httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"msg\":\"Cannot change resolution while recording\"}");
+        return ESP_OK;
+    }
+
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
         httpd_query_key_value(query, "size", size, sizeof(size)) == ESP_OK) {
+        
+        Serial.printf("[CAM] Resolution Change Request → %s\n", size);
+        
+        // Sometimes the camera driver needs a moment if a frame was just captured
+        delay(100); 
         setCameraResolution(size);
-        Serial.printf("[CAM] Resolution → %s\n", size);
+        delay(100);
+        
+        Serial.println("[CAM] Resolution applied");
     }
+    
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
@@ -318,18 +334,28 @@ static esp_err_t sdfilesHandler(httpd_req_t* req) {
     httpd_resp_set_type(req, "application/json");
 
     if (SD_MMC.cardType() == CARD_NONE) {
-        httpd_resp_sendstr(req, "{\"files\":[]}");
+        httpd_resp_sendstr(req, "{\"files\":[],\"error\":\"No SD card\"}");
         return ESP_OK;
     }
 
     String json = "{\"files\":[";
     File root = SD_MMC.open("/");
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"files\":[],\"error\":\"Failed to open root\"}");
+        return ESP_OK;
+    }
+
     File file = root.openNextFile();
     bool first = true;
     while (file) {
         if (!file.isDirectory()) {
             if (!first) json += ",";
-            json += "\"" + String(file.name()) + "\"";
+            
+            String name = String(file.name());
+            // Ensure no leading slash in the JSON string for the client
+            if (name.startsWith("/")) name = name.substring(1);
+            
+            json += "\"" + name + "\"";
             first = false;
         }
         file = root.openNextFile();
@@ -367,10 +393,11 @@ void serverStart() {
     config.server_port = 80;
     config.ctrl_port = 32768;
     config.lru_purge_enable = true;
+    config.max_uri_handlers = 16; // Increased from default 8
     
     // Performance Tweak: Increase priority and stack
-    config.task_priority = 5; // Standard is 5, but we ensure it's prioritized
-    config.stack_size = 8192; // Increase stack for more stable handling
+    config.task_priority = 5;
+    config.stack_size = 8192;
 
     httpd_uri_t uris[] = {
         { "/",           HTTP_GET, indexHandler,      NULL },

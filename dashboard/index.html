@@ -3,126 +3,7 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESP32-CAM</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0f0f0f;
-      color: #e0e0e0;
-      font-family: -apple-system, sans-serif;
-      min-height: 100vh;
-      padding: 16px;
-    }
-    h1 { font-size: 16px; font-weight: 500; margin-bottom: 16px;
-         color: #fff; letter-spacing: 0.5px; }
-
-    /* stream */
-    .stream-wrap {
-      background: #1a1a1a;
-      border-radius: 10px;
-      overflow: hidden;
-      margin-bottom: 16px;
-      position: relative;
-    }
-    #stream {
-      width: 100%;
-      display: block;
-      max-height: 400px;
-      object-fit: contain;
-      background: #000;
-    }
-    .stream-overlay {
-      position: absolute; top: 8px; right: 8px;
-      background: rgba(0,0,0,0.6);
-      border-radius: 6px; padding: 4px 10px;
-      font-size: 11px; color: #4caf50;
-    }
-    .stream-overlay.off { color: #f44336; }
-
-    /* controls grid */
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-            margin-bottom: 16px; }
-    .card {
-      background: #1a1a1a;
-      border-radius: 10px;
-      padding: 14px;
-    }
-    .card h2 { font-size: 12px; color: #888; font-weight: 400;
-               margin-bottom: 10px; text-transform: uppercase;
-               letter-spacing: 0.5px; }
-
-    /* buttons */
-    button {
-      width: 100%;
-      padding: 9px;
-      border: none;
-      border-radius: 7px;
-      font-size: 13px;
-      cursor: pointer;
-      background: #2a2a2a;
-      color: #e0e0e0;
-      margin-bottom: 6px;
-      transition: background .15s;
-    }
-    button:last-child { margin-bottom: 0; }
-    button:active { background: #3a3a3a; }
-    button.active { background: #1e4d2b; color: #4caf50; }
-    button.danger  { background: #3a1a1a; color: #f44336; }
-
-    /* resolution */
-    select {
-      width: 100%;
-      padding: 9px;
-      border-radius: 7px;
-      background: #2a2a2a;
-      color: #e0e0e0;
-      border: none;
-      font-size: 13px;
-    }
-
-    /* snapshot preview */
-    .snap-wrap { margin-bottom: 16px; display: none; }
-    .snap-wrap img {
-      width: 100%;
-      border-radius: 10px;
-      display: block;
-    }
-    .snap-label {
-      font-size: 11px; color: #666;
-      margin-top: 6px; text-align: center;
-    }
-
-    /* sd card */
-    .sd-info {
-      background: #1a1a1a;
-      border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 16px;
-    }
-    .sd-info h2 { font-size: 12px; color: #888; font-weight: 400;
-                  margin-bottom: 10px; text-transform: uppercase;
-                  letter-spacing: 0.5px; }
-    .sd-row { display: flex; justify-content: space-between;
-              font-size: 13px; padding: 4px 0;
-              border-bottom: 1px solid #252525; }
-    .sd-row:last-child { border-bottom: none; }
-    .sd-val { color: #4caf50; }
-    .file-list { margin-top: 10px; max-height: 120px;
-                 overflow-y: auto; }
-    .file-item { font-size: 12px; color: #aaa; padding: 3px 0;
-                 border-bottom: 1px solid #222; }
-
-    /* status bar */
-    .status-bar {
-      background: #1a1a1a;
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 12px;
-      color: #666;
-      display: flex;
-      justify-content: space-between;
-    }
-    .status-bar span { color: #888; }
-  </style>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -144,26 +25,74 @@
 <div class="grid">
   <div class="card">
     <h2>Camera</h2>
-    <button onclick="takeSnapshot()">Snapshot</button>
-    <button onclick="reconnect()">Reconnect stream</button>
+    <button id="snap-btn" onclick="takeSnapshot()">Take Snapshot</button>
+    <button id="stream-btn" onclick="toggleStream()">Start Stream</button>
   </div>
   <div class="card">
-    <h2>Flash LED</h2>
-    <button id="led-btn" onclick="toggleLed()">Turn ON</button>
+    <h2>LEDs</h2>
+    <div style="margin-bottom: 10px">
+      <label style="font-size:10px; color:#666">FLASH (GPIO 4)</label>
+      <button id="flash-btn" onclick="toggleLed('flash')">Flash: OFF</button>
+    </div>
+    <div>
+      <label style="font-size:10px; color:#666">STATUS (GPIO 33)</label>
+      <button id="status-btn" onclick="toggleLed('status')">Status: OFF</button>
+    </div>
   </div>
   <div class="card">
-    <h2>Resolution</h2>
-    <select id="res-select" onchange="setResolution(this.value)">
-      <option value="QQVGA">160×120 QQVGA</option>
-      <option value="QVGA">320×240 QVGA</option>
-      <option value="VGA" selected>640×480 VGA</option>
-      <option value="SVGA">800×600 SVGA</option>
-      <option value="XGA">1024×768 XGA</option>
-    </select>
+    <h2>Black Box</h2>
+    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+      <div id="rec-dot" style="width:10px; height:10px; background:#444; border-radius:50%; margin-right:8px;"></div>
+      <span id="rec-status" style="font-size:12px; color:#888;">Standby</span>
+    </div>
+    <button id="rec-btn" onclick="toggleRecording()">Start Recording</button>
+    <div class="select-wrap">
+      <label style="font-size:10px; color:#666">STORAGE FULL</label>
+      <select id="rec-policy">
+        <option value="stop">Stop Recording</option>
+        <option value="overwrite">Overwrite Oldest</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="select-wrap">
+      <label style="font-size:10px; color:#666">RESOLUTION</label>
+      <select id="res-select" onchange="setResolution(this.value)">
+        <option value="QQVGA">160×120 QQVGA</option>
+        <option value="QVGA">320×240 QVGA</option>
+        <option value="VGA" selected>640×480 VGA</option>
+        <option value="SVGA">800×600 SVGA</option>
+        <option value="XGA">1024×768 XGA</option>
+      </select>
+    </div>
+    <div class="select-wrap">
+      <label style="font-size:10px; color:#666">MAX FPS</label>
+      <select id="fps-select" onchange="setFPS(this.value)">
+        <option value="1">1 FPS (Lowest CPU)</option>
+        <option value="5">5 FPS</option>
+        <option value="10" selected>10 FPS</option>
+        <option value="20">20 FPS</option>
+        <option value="0">Max (Heavy CPU)</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Display</h2>
+    <div class="select-wrap">
+      <label style="font-size:10px; color:#666">WINDOW SIZE</label>
+      <select id="size-select" onchange="setDisplaySize(this.value)">
+        <option value="300px">Small</option>
+        <option value="400px" selected>Medium</option>
+        <option value="600px">Large</option>
+        <option value="800px">X-Large</option>
+        <option value="100%">Full Width</option>
+      </select>
+    </div>
   </div>
   <div class="card">
     <h2>System</h2>
-    <button onclick="refreshStatus()">Refresh status</button>
+    <button id="stat-btn" onclick="refreshStatus()">Update Status</button>
     <button onclick="setCamIP()">Change IP</button>
   </div>
 </div>
@@ -186,113 +115,6 @@
   <span id="cam-ip">—</span>
 </div>
 
-<script>
-  // ---- config ----
-  // If served from the ESP32 itself, window.location.origin will be the camera IP.
-  // If served from a Mac/PC (port 8080), it will default to the IP below.
-  let CAM = window.location.port === '8080' ? 'http://192.168.4.1' : window.location.origin;
-
-  // check if we have a saved IP
-  if (localStorage.getItem('esp32_cam_ip')) {
-    CAM = localStorage.getItem('esp32_cam_ip');
-  }
-
-  function setCamIP() {
-    const ip = prompt('Enter ESP32-CAM IP (e.g. http://192.168.1.50):', CAM);
-    if (ip) {
-      CAM = ip.startsWith('http') ? ip : 'http://' + ip;
-      localStorage.setItem('esp32_cam_ip', CAM);
-      location.reload();
-    }
-  }
-
-  let ledOn = false;
-
-  // ---- stream ----
-  function startStream() {
-    const img = document.getElementById('stream');
-    const status = document.getElementById('stream-status');
-    img.src = CAM + '/stream?' + Date.now();
-    img.onload  = () => { status.textContent = 'LIVE'; status.className = 'stream-overlay'; };
-    img.onerror = () => { status.textContent = 'OFF';  status.className = 'stream-overlay off'; };
-  }
-
-  function reconnect() { startStream(); }
-
-  // ---- snapshot ----
-  function takeSnapshot() {
-    const wrap  = document.getElementById('snap-wrap');
-    const img   = document.getElementById('snap-img');
-    const label = document.getElementById('snap-label');
-    img.src = CAM + '/capture?' + Date.now();
-    img.onload = () => {
-      wrap.style.display = 'block';
-      label.textContent  = 'saved at ' + new Date().toLocaleTimeString();
-    };
-  }
-
-  // ---- LED ----
-  function toggleLed() {
-    ledOn = !ledOn;
-    fetch(CAM + '/led?state=' + (ledOn ? 'on' : 'off'))
-      .then(r => r.json())
-      .then(() => {
-        const btn = document.getElementById('led-btn');
-        btn.textContent = ledOn ? 'Turn OFF' : 'Turn ON';
-        btn.className   = ledOn ? 'active' : '';
-      })
-      .catch(() => alert('LED request failed'));
-  }
-
-  // ---- resolution ----
-  function setResolution(size) {
-    fetch(CAM + '/resolution?size=' + size)
-      .then(() => setTimeout(startStream, 500));
-  }
-
-  // ---- status ----
-  function refreshStatus() {
-    fetch(CAM + '/status')
-      .then(r => r.json())
-      .then(d => {
-        document.getElementById('heap').textContent =
-          Math.round(d.free_heap / 1024) + ' KB';
-        document.getElementById('psram').textContent =
-          d.psram ? 'yes' : 'no';
-        document.getElementById('cam-ip').textContent = CAM;
-      })
-      .catch(() => {});
-  }
-
-  // ---- SD ----
-  function refreshSD() {
-    fetch(CAM + '/sdinfo')
-      .then(r => r.json())
-      .then(d => {
-        document.getElementById('sd-status').textContent =
-          d.mounted ? 'mounted' : 'not found';
-        document.getElementById('sd-total').textContent =
-          d.mounted ? d.total_mb + ' MB' : '—';
-        document.getElementById('sd-used').textContent =
-          d.mounted ? d.used_mb + ' MB' : '—';
-      });
-
-    fetch(CAM + '/sdfiles')
-      .then(r => r.json())
-      .then(d => {
-        const list = document.getElementById('file-list');
-        list.innerHTML = d.files.length === 0
-          ? '<div class="file-item">no files</div>'
-          : d.files.map(f =>
-              `<div class="file-item">${f}</div>`).join('');
-      });
-  }
-
-  // ---- init ----
-  startStream();
-  refreshStatus();
-  refreshSD();
-  setInterval(refreshStatus, 10000);
-</script>
+<script src="js/script.js"></script>
 </body>
 </html>
