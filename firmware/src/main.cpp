@@ -20,8 +20,10 @@ void setup() {
     }
 
     if (!cameraInit()) {
-        Serial.println("Camera failed — halting");
-        while (true) delay(1000);
+        // Another boot gives the sensor a fresh start
+        Serial.println("Camera failed — restarting in 5 s");
+        delay(5000);
+        ESP.restart();
     }
 
     auto mode = networkInit(STA_SSID, STA_PASS,
@@ -45,5 +47,6 @@ void setup() {
 }
 
 void loop() {
-    delay(10000);
+    networkLoop();
+    delay(500);
 }

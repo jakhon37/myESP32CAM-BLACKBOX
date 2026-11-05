@@ -72,6 +72,8 @@ This script "packs" the web files into `firmware/src/server/index_html.h`. Then,
 2. Open your browser and go to: `http://<esp32-ip>/`
     - *Default AP IP: `http://192.168.4.1/`*
 
+The ESP32 tries your Wi-Fi for 10 seconds at boot, then starts its hotspot. While nobody is connected to the hotspot, it tries your Wi-Fi again every 30 seconds.
+
 ### Local Development Server
 To preview UI changes instantly on your Mac without flashing:
 ```bash
